@@ -14,7 +14,7 @@ env/
 # Environment variables / secrets
 .env
 
-# Data (raw data shouldn't be committed; processed CSVs can get large too)
+
 data/raw/
 data/processed/*.csv
 
