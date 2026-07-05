@@ -1,0 +1,36 @@
+# Byte-compiled / cache
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Virtual environment
+venv/
+env/
+.venv/
+
+# Jupyter
+.ipynb_checkpoints/
+
+# Environment variables / secrets
+.env
+
+# Data (raw data shouldn't be committed; processed CSVs can get large too)
+data/raw/
+data/processed/*.csv
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/*
+!.vscode/settings.json
+.idea/
+
+# Testing / coverage
+.pytest_cache/
+htmlcov/
+.coverage
+
+# Logs
+*.log
