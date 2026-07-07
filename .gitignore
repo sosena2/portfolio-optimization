@@ -17,6 +17,9 @@ env/
 
 data/raw/
 data/processed/*.csv
+data/processed/*.keras
+data/processed/*.pkl
+
 
 # OS files
 .DS_Store
@@ -34,3 +37,4 @@ htmlcov/
 
 # Logs
 *.log
+
