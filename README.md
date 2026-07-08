@@ -1,119 +1,164 @@
 # Time Series Forecasting for Portfolio Management Optimization
 
+A GMF Investments project applying time series forecasting and Modern Portfolio Theory (MPT) to optimize
+a portfolio across TSLA, BND, and SPY.
+
 ## Overview
 
-This project applies time series forecasting to historical financial data to support 
-portfolio management decisions for **GMF Investments**. It covers data extraction, 
-exploratory analysis, and forecasting models for three assets with different risk 
-profiles: **TSLA** (high-growth stock), **BND** (bond ETF, low risk), and **SPY** 
-(S&P 500 ETF, moderate risk).
-
-Data covers **January 1, 2015 to June 30, 2026**, sourced via the YFinance API.
-
-## Project Status
-
-- ✅ **Task 1** — Data extraction, cleaning, EDA, stationarity testing, risk metrics (complete)
-- 🔄 **Task 2** — Forecasting models (ARIMA complete, LSTM in progress)
-- ⬜ Task 3 — Future forecasting & trend analysis
-- ⬜ Task 4 — Portfolio optimization (MPT / Efficient Frontier)
-- ⬜ Task 5 — Strategy backtesting
+This project analyzes historical financial data (Jan 2015 - Jun 2026) for three assets with distinct
+risk profiles — Tesla (TSLA, high-growth/high-risk), Vanguard Total Bond Market ETF (BND, low-risk),
+and the S&P 500 ETF (SPY, moderate-risk) — to forecast future price trends, construct an optimal
+portfolio using Modern Portfolio Theory, and validate that portfolio through historical backtesting
+against a standard 60/40 benchmark.
 
 ## Project Structure
 portfolio-optimization/
-├── .vscode/
-│   └── settings.json
 ├── .github/
 │   └── workflows/
-│       └── unittests.yml
-├── .gitignore
-├── requirements.txt
-├── README.md
+│       └── unittests.yml          # CI test runner
+├── .vscode/
+│   └── settings.json
 ├── data/
-│   └── processed/         # Cached CSVs fetched from YFinance
+│   └── processed/                 # Cleaned CSVs, saved models, metrics (see Data section)
 ├── notebooks/
-│   ├── init.py
-│   ├── README.md
-│   └── eda_and_modeling.ipynb
+│   ├── eda_and_modeling.ipynb     # Task 1 (EDA) + Task 2 (ARIMA)
+│   ├── lstm_model.ipynb           # Task 2 (LSTM)
+│   ├── future_forecast.ipynb      # Task 3
+│   ├── portfolio_optimization.ipynb  # Task 4
+│   └── backtesting.ipynb          # Task 5
 ├── src/
-│   ├── init.py
-│   ├── data_loader.py      # Fetch/load asset data
-│   └── stats_utils.py      # ADF test, VaR, Sharpe Ratio helpers
+│   ├── data_loader.py             # Fetch/load asset data from YFinance or local CSV
+│   └── stats_utils.py             # Stationarity tests, risk metrics
 ├── tests/
-│   ├── init.py
 │   ├── test_data_loader.py
 │   └── test_stats_utils.py
-└── scripts/
-└── init.py
+├── requirements.txt
+└── README.md
 ## Setup
 
-### 1. Clone the repo
-```bash
-git clone <repo-url>
-cd portfolio-optimization
-```
-
-### 2. Create and activate a virtual environment
-```bash
+```powershell
 python -m venv venv
-
-# macOS/Linux
-source venv/bin/activate
-
-# Windows
 venv\Scripts\activate
-```
-
-### 3. Install dependencies
-```bash
 pip install -r requirements.txt
 ```
 
-### 4. Run the notebook
-```bash
-jupyter notebook notebooks/eda_and_modeling.ipynb
+Key dependencies: `yfinance`, `pandas`, `numpy`, `statsmodels`, `pmdarima`, `tensorflow`, `scikit-learn`,
+`PyPortfolioOpt`, `matplotlib`.
+
+## Data
+
+Historical daily OHLCV data for TSLA, BND, and SPY (Jan 1, 2015 - Jun 30, 2026), sourced via `yfinance`
+and cached locally as CSVs in `data/processed/`. Model binaries (`.keras`, `.pkl`) are excluded from
+version control (see `.gitignore`); regenerate them by running the notebooks in order. Small JSON
+result files (metrics, forecast/portfolio summaries) are committed since they're lightweight and used
+to pass results between notebooks.
+
+## Methodology by Task
+
+### Task 1 — Data Preprocessing & EDA
+*(`eda_and_modeling.ipynb`)*
+
+- Fetched and cleaned historical price data for all three assets
+- Analyzed closing price trends, daily returns, and rolling volatility
+- Ran the Augmented Dickey-Fuller test to check stationarity of price levels vs. daily returns
+- Calculated foundational risk metrics: Value at Risk (VaR) and historical Sharpe Ratio
+- Identified and reviewed outlier return days
+
+### Task 2 — Time Series Forecasting Models
+*(`eda_and_modeling.ipynb` for ARIMA, `lstm_model.ipynb` for LSTM)*
+
+- Split data chronologically (train: 2015-2024, test: 2025-2026) to preserve temporal order
+- **ARIMA**: parameters selected via `auto_arima`, fitted on training data, forecasted over the test
+  period
+- **LSTM**: 60-day sliding window input, 2-layer LSTM architecture (64 → 32 units) with dropout
+  regularization, trained with early stopping
+- Compared both models using MAE, RMSE, and MAPE on the test set
+
+| Model | Notes |
+|-------|-------|
+| ARIMA | Interpretable, produces native confidence intervals |
+| LSTM  | Captures nonlinear patterns; confidence intervals approximated via Monte Carlo Dropout |
+
+*(See `data/processed/lstm_metrics.json` and the ARIMA evaluation cell in `eda_and_modeling.ipynb` for
+exact metric values.)*
+
+### Task 3 — Future Forecasting
+*(`future_forecast.ipynb`)*
+
+- Generated a 12-month forward forecast for TSLA using the selected model (ARIMA)
+- Visualized the forecast with 95% confidence intervals against historical prices
+
+**Key results:**
+- Projected 12-month change: **-44.26%**
+- CI width: **83.89** (start of horizon) → **163.9** (end of horizon), a **1.95x** widening
+- The point forecast shows a sharp initial decline that flattens toward ARIMA's long-run mean —
+  a known limitation of ARIMA at longer horizons rather than a high-confidence directional prediction.
+  The wide, persistent confidence interval reflects genuinely low reliability at this range, consistent
+  with the Efficient Market Hypothesis's expectation that long-horizon price prediction is inherently
+  difficult.
+
+### Task 4 — Portfolio Optimization (MPT)
+*(`portfolio_optimization.ipynb`)*
+
+- Built an expected returns vector using TSLA's forecasted return (Task 3) and historical annualized
+  returns for BND/SPY
+- Computed the covariance matrix from historical daily returns
+- Generated the Efficient Frontier using `PyPortfolioOpt`, identifying both the Max Sharpe (Tangency)
+  and Minimum Volatility portfolios
+
+| Portfolio | TSLA | BND | SPY | Return | Volatility | Sharpe |
+|---|---|---|---|---|---|---|
+| Min Volatility | 0% | 94.29% | 5.71% | -0.08% | 5.27% | -0.015 |
+| **Max Sharpe (recommended)** | 0% | 0% | **100%** | **12.77%** | 17.72% | **0.721** |
+
+**Recommendation:** Max Sharpe Portfolio (100% SPY). Both optimized portfolios excluded TSLA entirely,
+a direct consequence of its deeply negative forecasted return — no diversification benefit justified
+holding an asset with negative expected return. Between the remaining options, Max Sharpe offers
+substantially better risk-adjusted return than Min Volatility, whose near-zero return provides
+essentially no compensation for the risk taken.
+
+*Note: this recommendation is highly sensitive to the Task 3 ARIMA forecast — a different model or
+forecast horizon could shift TSLA's expected return enough to change the optimal allocation.*
+
+### Task 5 — Strategy Backtesting
+*(`backtesting.ipynb`)*
+
+- Backtested the Task 4 recommended portfolio (Strategy) against a static 60% SPY / 40% BND benchmark
+- Backtest window: Jan 2025 - Jun 2026 (held out from model training)
+
+| Portfolio | Total Return | Annualized Return | Sharpe Ratio | Max Drawdown |
+|---|---|---|---|---|
+| Strategy (100% SPY) | 26.43% | 17.22% | 0.976 | -19.00% |
+| Benchmark (60/40) | 16.89% | 11.15% | 0.999 | -11.67% |
+
+**Conclusion:** The Strategy outperformed the Benchmark on absolute return (+6pp annualized) but not
+on risk-adjusted return — its Sharpe ratio was marginally lower and its max drawdown notably deeper.
+Since the optimizer excluded TSLA entirely, this backtest is effectively a comparison of SPY vs. a
+SPY/BND blend rather than a genuine test of the forecasting pipeline's added value. Results should be
+treated as inconclusive given the single backtest window, absence of transaction cost modeling, and the
+sensitivity of the whole pipeline to Task 3's forecast uncertainty.
+
+## Key Limitations
+
+- Single backtest period; results may not generalize across different market regimes
+- No transaction or rebalancing costs modeled
+- TSLA forecast (and therefore portfolio composition) is highly sensitive to ARIMA's long-horizon
+  reliability, which this project's own analysis shows is limited
+- Per the Efficient Market Hypothesis, these models are best used as one input among many in a broader
+  decision framework — not as standalone predictive tools
+
+## Running the Project
+
+Notebooks must be run in order, as later tasks depend on outputs from earlier ones:
+
+1. `eda_and_modeling.ipynb` — Task 1 + ARIMA (Task 2)
+2. `lstm_model.ipynb` — LSTM (Task 2), saves `lstm_metrics.json`
+3. `future_forecast.ipynb` — Task 3, saves `forecast_summary.json`
+4. `portfolio_optimization.ipynb` — Task 4, saves `portfolio_summary.json`
+5. `backtesting.ipynb` — Task 5
+
+## Tests
+
+```powershell
+pytest tests/
 ```
-
-## Running Tests
-
-```bash
-pip install pytest pytest-cov
-pytest tests/ -v
-```
-
-Tests also run automatically via GitHub Actions on every push/PR (see 
-`.github/workflows/unittests.yml`).
-
-## What's Been Done
-
-### Task 1 — Preprocess and Explore the Data
-- Fetched historical OHLCV data for TSLA, BND, and SPY via `yfinance`
-- Cleaned data: reindexed to business-day frequency, forward-filled missing values
-- Combined adjusted close prices across all three assets into a single DataFrame
-- Visualized closing prices, daily returns, and 30-day rolling volatility
-- Detected outlier/extreme return days (>3 std dev)
-- Ran Augmented Dickey-Fuller (ADF) tests on raw prices and daily returns:
-  - Raw prices → non-stationary (as expected, given visible trends)
-  - Daily returns → stationary, confirming `d=1` differencing is sufficient for ARIMA
-- Calculated risk metrics: Value at Risk (95%) and annualized Sharpe Ratio for all 
-  three assets
-
-### Task 2 — Build Time Series Forecasting Models (in progress)
-- Split TSLA closing price data chronologically (train: 2015–2024, test: 2025–2026)
-- Built and fit an **ARIMA model** using `auto_arima` (pmdarima) for automatic 
-  parameter selection
-- Generated forecasts on the test period with confidence intervals
-- Evaluated performance using MAE, RMSE, and MAPE
-- **Next up**: LSTM model implementation and comparison against ARIMA baseline
-
-## Key Insights So Far
-
-- TSLA shows a strong long-term upward trend with the highest volatility of the 
-  three assets; BND remains stable and low-volatility; SPY sits in between.
-- TSLA's VaR (95%) is notably more negative than BND/SPY, reflecting larger 
-  potential single-day losses.
-- Daily returns across all assets are stationary, supporting the use of ARIMA-family 
-  models with first-order differencing.
-
-## Notes.
-- Source data is fetched live via the YFinance API and cached locally in 
-  `data/processed/`; it is not committed to version control.
